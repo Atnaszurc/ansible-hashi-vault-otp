@@ -1,0 +1,45 @@
+---
+- name: "Fetch the Approle role_id from Vault"
+  uri:
+    url: "{{ vault_host }}/v1/auth/approle/role/my-role/role-id"
+    headers: {X-Vault-Token: "{{ vault_token }}"}
+  delegate_to: 127.0.0.1
+  register: vault_role
+
+- name: "Fetch the Approle secret_id from Vault"
+  uri:
+    url: "{{ vault_host }}/v1/auth/approle/role/my-role/secret-id"
+    method: POST
+    headers: {X-Vault-Token: "{{ vault_token }}"}
+  delegate_to: 127.0.0.1
+  register: vault_secret
+
+- name: authenticate with a Vault app role
+  uri:
+    url: "{{ vault_host }}/v1/auth/approle/login"
+    method: POST
+    body_format: json
+    body:
+      role_id: "{{ vault_role.json.data.role_id }}"
+      secret_id: "{{ vault_secret.json.data.secret_id }}"
+  delegate_to: 127.0.0.1
+  register: vault_client_token
+
+- name: authenticate with the returned token
+  uri:
+    url: "{{ vault_host }}/v1/ssh/creds/otp_key_role"
+    method: POST
+    body_format: json
+    body:
+      ip: "{{ ansible_host }}"
+    headers: {X-Vault-Token: '{{ vault_client_token.json.auth.client_token }}'}
+  delegate_to: 127.0.0.1
+  register: vault_returned_key
+
+- name: Add host to inventory
+  add_host:
+    hostname: "{{ item }}"
+    groups: vault_host_group
+    ansible_user: "{{ vault_returned_key.json.data.username }}"
+    ansible_password: "{{ vault_returned_key.json.data.key }}"
+  loop: "{{ query('inventory_hostnames', 'all') }}"

@@ -1,0 +1,22 @@
+---
+- hosts: all
+  vars: 
+    vault_host: "{{ lookup('env', 'VAULT_ADDR') }}"
+    vault_token: "{{ lookup('env', 'VAULT_TOKEN') }}"
+    isApprole: false
+  gather_facts: no
+  tasks:
+    - name: Run token.yml if isApprole is false
+      include_tasks: token.yml
+      when: not isApprole
+    - name: Run approle.yml if isApprole is true
+      include_tasks: approle.yml
+      when: isApprole
+
+- hosts: vault_host_group
+  tasks:
+    - name: Create file
+      copy: 
+        dest: /home/ubuntu/ansible.txt
+        content: |
+          Host: {{ ansible_host }}
